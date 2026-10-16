@@ -3,7 +3,7 @@ import re
 import requests
 from playwright.sync_api import sync_playwright
 URL = 'https://buyticketbrasil.com/event/primaverasound-2026'
-PRECO_MAX = 200 # <-- TROQUE pelo seu valor máximo, em reais
+PRECO_MAX = 99999 # <-- TROQUE pelo seu valor máximo, em reais
 TOPICO = os.environ['NTFY_TOPIC']
 with sync_playwright() as p:
 navegador = p.chromium.launch()
