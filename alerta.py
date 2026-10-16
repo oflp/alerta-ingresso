@@ -1,14 +1,22 @@
 import os
 import requests
 
-SESSAO = 'ced30381-0cc4-4779-9c6b-ba05f44d086e'
+SESSAO = 'efba49ae-e7ac-4a9d-bcc7-09c51d093fd5'
 API = f'https://buyticketbrasil.com/api/backend/marketplaces/sessions/{SESSAO}/tickets'
-LINK = 'https://buyticketbrasil.com/event/bts-2026worldtourarirang/'
-PRECO_MAX = 99999  # valor de teste; troque pelo real depois
-SETORES = []  # vazio = todos; ou por exemplo ['Pista', 'Cadeira Inferior']
+LINK = 'https://buyticketbrasil.com/event/primaverasound-2026/session/efba49ae-e7ac-4a9d-bcc7-09c51d093fd5'
+PRECO_MAX = 200  # valor de teste; troque pelo seu valor máximo real
+SETORES = ['Inteira','Meia Social']  # vazio = todos; ou por exemplo ['Pista', 'Meia Social']
+TITULO = 'INGRESSO DISPONÍVEL - PRIMAVERA 05/12'
 TOPICO = os.getenv('NTFY_TOPIC')
 if not TOPICO:
     raise RuntimeError('NTFY_TOPIC não definido')
+
+
+def formatar(valor):
+    texto = f'{valor:,.2f}'
+    texto = texto.replace(',', 'X').replace('.', ',').replace('X', '.')
+    return f'R$ {texto}'
+
 
 resposta = requests.get(API, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
 resposta.raise_for_status()
@@ -28,9 +36,13 @@ for t in ingressos:
 
 if achados:
     achados.sort()
-    linhas = [f'{nome}: R${preco:.2f}' for preco, nome in achados]
-    mensagem = 'Ingresso disponível!\n' + '\n'.join(linhas) + '\n' + LINK
-    requests.post(f'https://ntfy.sh/{TOPICO}', data=mensagem.encode('utf-8'))
+    linhas = [f'{nome} - {formatar(preco)}' for preco, nome in achados]
+    mensagem = TITULO + '\n' + '\n'.join(linhas)
+    requests.post(
+        f'https://ntfy.sh/{TOPICO}',
+        data=mensagem.encode('utf-8'),
+        headers={'Click': LINK},
+    )
     print('Aviso enviado.')
 else:
     print('Nada abaixo do limite.')
