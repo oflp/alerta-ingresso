@@ -1,52 +1,35 @@
 import os
-import re
 import requests
-from playwright.sync_api import sync_playwright
 
-URL = 'https://buyticketbrasil.com/event/bts-2026worldtourarirang/'
+SESSAO = 'ced30381-0cc4-4779-9c6b-ba05f44d086e'
+API = f'https://buyticketbrasil.com/api/backend/marketplaces/sessions/{SESSAO}/tickets'
+LINK = 'https://buyticketbrasil.com/event/bts-2026worldtourarirang/'
 PRECO_MAX = 99999  # valor de teste; troque pelo real depois
+SETORES = []  # vazio = todos; ou por exemplo ['Pista', 'Cadeira Inferior']
 TOPICO = os.getenv('NTFY_TOPIC')
 if not TOPICO:
     raise RuntimeError('NTFY_TOPIC não definido')
 
-respostas = []
+resposta = requests.get(API, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
+resposta.raise_for_status()
+ingressos = resposta.json().get('tickets', [])
 
+achados = []
+for t in ingressos:
+    nome = t['ticketType']
+    preco = t['amount']['value']
+    print(nome, preco)
+    if preco <= 0:
+        continue
+    if SETORES and nome not in SETORES:
+        continue
+    if preco <= PRECO_MAX:
+        achados.append((preco, nome))
 
-def ao_responder(r):
-    tipo = r.headers.get('content-type', '')
-    if 'json' in tipo:
-        respostas.append(r.url)
-
-
-with sync_playwright() as p:
-    navegador = p.chromium.launch(headless=True, args=['--no-sandbox'])
-    contexto = navegador.new_context(
-        locale='pt-BR',
-        user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-    )
-    pagina = contexto.new_page()
-    pagina.on('response', ao_responder)
-    pagina.goto(URL, wait_until='domcontentloaded')
-    pagina.wait_for_timeout(10000)
-    texto = pagina.inner_text('body')
-    navegador.close()
-
-print('Tamanho do texto:', len(texto))
-print('--- INICIO DO TEXTO ---')
-print(texto[:1500])
-print('--- FIM DO TRECHO ---')
-print('Respostas JSON:')
-for u in respostas[:20]:
-    print(u)
-
-precos = []
-for x in re.findall(r'R\$\s*([\d.]+(?:,\d{2})?)', texto):
-    precos.append(float(x.replace('.', '').replace(',', '.')))
-print('Preços encontrados:', precos)
-
-baratos = [x for x in precos if x <= PRECO_MAX]
-if baratos:
-    mensagem = f'Ingresso por R${min(baratos):.2f}! {URL}'
+if achados:
+    achados.sort()
+    linhas = [f'{nome}: R${preco:.2f}' for preco, nome in achados]
+    mensagem = 'Ingresso disponível!\n' + '\n'.join(linhas) + '\n' + LINK
     requests.post(f'https://ntfy.sh/{TOPICO}', data=mensagem.encode('utf-8'))
     print('Aviso enviado.')
 else:
